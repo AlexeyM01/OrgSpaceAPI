@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+
+# Virtual environment
+venv/
+
+# PyCharm
+*.idea/
+
+# Файлы конфиденциальной информации
+*.env
+
+# Файлы логов
+*.log
+/logs/
