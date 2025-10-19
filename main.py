@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
@@ -21,6 +22,22 @@ async def startup_event():
     await init_db()
 
 
-@app.get("/")
-async def read_root():
-    return {"message": "Hello World!"}
+@app.get("/organizations/by_building_address/",
+         description="Получает организации, связанные с указанным адресом здания")
+async def get_organizations_by_building_address(address: str, db: AsyncSession = Depends(get_db)):
+    try:
+        building_query = select(Building).where(Building.address == address)
+        result = await db.execute(building_query)
+        building = result.scalars().first()
+        if not building:
+            return JSONResponse(status_code=404, content={"message": "Здание не найдено"})
+
+        organizations_query = select(Organization).where(Organization.building_id == building.id)
+        organizations_result = await db.execute(organizations_query)
+        organizations = organizations_result.scalars().all()
+        if not organizations:
+            return JSONResponse(status_code=404, content={"message": "Организация не найдена"})
+
+        return {"organizations": [org.name for org in organizations]}
+    except Exception as e:
+        return handle_exception(e)
