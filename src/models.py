@@ -121,8 +121,8 @@ class ActivityCreate(BaseModel):
 
     @field_validator('parent_id')
     def validate_parent_id(cls, value):
-        if value == 0:
-            raise ValueError("Parent ID cannot be 0")
+        if value <= 0:
+            raise ValueError("Parent ID cannot be negative")
         return value
 
 

@@ -1,18 +1,26 @@
-"""
-main.py
-"""
+from fastapi import FastAPI, Depends
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+import logging
 
-from fastapi import FastAPI
-from src.config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS
+from src.database import get_db, init_db
+from src.models import Organization, Building, Activity
 
 app = FastAPI()
 
+logging.basicConfig()
+logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+
+
+def handle_exception(e):
+    return JSONResponse(status_code=500, content={"message": f"Произошла неизвестная ошибка: {e}"})
+
+
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
+
 
 @app.get("/")
-def read_root():
-    return {
-        "DB Host": DB_HOST,
-        "DB Port": DB_PORT,
-        "DB Name": DB_NAME,
-        "DB User": DB_USER,
-    }
+async def read_root():
+    return {"message": "Hello World!"}
