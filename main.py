@@ -105,3 +105,37 @@ async def get_organization(org_id: int, db: AsyncSession = Depends(get_db)):
         }
     except Exception as e:
         return handle_exception(e)
+
+
+@app.get("/organizations/search_by_activity/")
+async def search_organizations_by_activity(activity_name: str, db: AsyncSession = Depends(get_db)):
+    activities_to_search = []
+
+    async def find_subactivities(activity, level):
+        if activity:
+            activities_to_search.append(activity)
+            query = select(Activity).where(Activity.parent_id == activity.id)
+            sub_activities = await db.execute(query)
+            sub_activities_list = sub_activities.scalars().all()
+            if level <= 3:
+                for sub_activity in sub_activities_list:
+                    await find_subactivities(sub_activity, level + 1)
+
+    try:
+        root_query = select(Activity).where(Activity.name == activity_name)
+        root_result = await db.execute(root_query)
+        root_activity = root_result.scalars().first()
+
+        if root_activity:
+            await find_subactivities(root_activity, 1)
+
+        organizations = set()
+        for activity in activities_to_search:
+            query = select(OrganizationActivity).where(OrganizationActivity.activity_id == activity.id)
+            orgs_result = await db.execute(query)
+            orgs = orgs_result.scalars().all()
+            organizations.update(org.organization for org in orgs)
+
+        return {"organizations": [org.name for org in organizations]}
+    except Exception as e:
+        return handle_exception(e)
