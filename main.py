@@ -60,3 +60,48 @@ async def get_organizations_by_activity_name(activity_name: str, db: AsyncSessio
         return {"organizations": [org.organization.name for org in organizations]}
     except Exception as e:
         return handle_exception(e)
+
+
+@app.get("/organizations/by_area/",
+         description="Получает здания, расположенные в указанной области")
+async def get_organizations_by_area(latitude: float, longitude: float, lat_diff: float, lon_diff: float,
+                                    db: AsyncSession = Depends(get_db)):
+    try:
+        min_latitude = latitude - lat_diff
+        max_latitude = latitude + lat_diff
+        min_longitude = longitude - lon_diff
+        max_longitude = longitude + lon_diff
+
+        query = select(Building).where(
+            Building.latitude.between(min_latitude, max_latitude),
+            Building.longitude.between(min_longitude, max_longitude)
+        )
+        result = await db.execute(query)
+        buildings = result.scalars().all()
+
+        return {"buildings": [{"id": b.id, "address": b.address} for b in buildings]}
+    except Exception as e:
+        return handle_exception(e)
+
+
+@app.get("/organization/{org_id}/", description="Получает детали организации по ID")
+async def get_organization(org_id: int, db: AsyncSession = Depends(get_db)):
+    try:
+        organization_query = select(Organization).where(Organization.id == org_id)
+        result = await db.execute(organization_query)
+        organization = result.scalars().first()
+        if not organization:
+            return JSONResponse(status_code=404, content={"message": "Организация не найдена"})
+
+        address_query = select(Building).where(Building.id == organization.building_id)
+        address_result = await db.execute(address_query)
+        address = address_result.scalars().first()
+
+        return {
+            "id": organization.id,
+            "name": organization.name,
+            "address": address.address if address else None,
+            "phone_numbers": [pn.number for pn in organization.phone_numbers]
+        }
+    except Exception as e:
+        return handle_exception(e)
