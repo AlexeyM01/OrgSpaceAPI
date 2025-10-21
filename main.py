@@ -177,3 +177,46 @@ async def create_building(address: str, latitude: float, longitude: float, db: A
     except Exception as e:
         await db.rollback()
         return handle_exception(e)
+
+
+@app.post("/create_organization/",
+          description="Создает новую организацию по указанным данным")
+async def create_organization(name: str, address: str, phone_numbers: list[str], activities: list[str],
+                              db: AsyncSession = Depends(get_db)):
+    try:
+        # Проверяем, существует ли организация с таким же именем
+        existing_organization_query = select(Organization).where(Organization.name == name)
+        existing_organization_result = await db.execute(existing_organization_query)
+        existing_organization = existing_organization_result.scalars().first()
+        if existing_organization:
+            return HTTPException(status_code=400, detail="Организация с таким именем уже существует")
+
+        building_query = select(Building).where(Building.address == address)
+        building_result = await db.execute(building_query)
+        building = building_result.scalars().first()
+        if not building:
+            return JSONResponse(status_code=404, content={"message": "Здание не найдено"})
+
+        new_organization = Organization(name=name, building_id=building.id)
+        db.add(new_organization)
+        await db.commit()
+        await db.refresh(new_organization)
+
+        for number in phone_numbers:
+            phone_number = PhoneNumber(number=number, organization_id=new_organization.id)
+            db.add(phone_number)
+
+        for activity_name in activities:
+            activity_query = select(Activity).where(Activity.name == activity_name)
+            activity_result = await db.execute(activity_query)
+            activity = activity_result.scalars().first()
+            if activity:
+                org_activity = OrganizationActivity(organization_id=new_organization.id, activity_id=activity.id)
+                db.add(org_activity)
+
+        await db.commit()
+        return {"id": new_organization.id, "name": new_organization.name}
+    except Exception as e:
+        await db.rollback()
+        return handle_exception(e)
+
