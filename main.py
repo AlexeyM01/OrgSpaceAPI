@@ -139,3 +139,35 @@ async def search_organizations_by_activity(activity_name: str, db: AsyncSession 
         return {"organizations": [org.name for org in organizations]}
     except Exception as e:
         return handle_exception(e)
+
+
+@app.get("/organizations/search_by_name/",
+         description="Ищет организации, имена которых содержат указанную строку")
+async def search_organizations_by_name(name: str, db: AsyncSession = Depends(get_db)):
+    try:
+        query = select(Organization).where(Organization.name.ilike(f"%{name}%"))
+        result = await db.execute(query)
+        organizations = result.scalars().all()
+
+        return {"organizations": [{
+            "id": organization.id,
+            "name": organization.name,
+            "address": organization.building.address if organization.building else None,
+            "phone_numbers": [pn.number for pn in organization.phone_numbers]
+        } for organization in organizations]}
+    except Exception as e:
+        return handle_exception(e)
+
+
+@app.post("/create_building/",
+          description="Создает новую запись о здании по указанным адресом и координатами")
+async def create_building(address: str, latitude: float, longitude: float, db: AsyncSession = Depends(get_db)):
+    try:
+        new_building = Building(address=address, latitude=latitude, longitude=longitude)
+        db.add(new_building)
+        await db.commit()
+        await db.refresh(new_building)
+        return {"id": new_building.id, "message": "Здание успешно создано"}
+    except Exception as e:
+        await db.rollback()
+        return handle_exception(e)
