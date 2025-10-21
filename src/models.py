@@ -35,7 +35,7 @@ class PhoneNumber(Base):
     organization = relationship("Organization", back_populates="phone_numbers", lazy="selectin")
 
     @validates('number')
-    def validate_number(self, number):
+    def validate_number(self, cls, number):
         try:
             parsed_number = phonenumbers.parse(number, "RU")
             return phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)

@@ -1,11 +1,11 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from src.database import get_db, init_db
-from src.models import Organization, Building, Activity, OrganizationActivity
+from src.models import Organization, Building, Activity, OrganizationActivity, PhoneNumber
 
 app = FastAPI()
 
@@ -163,6 +163,12 @@ async def search_organizations_by_name(name: str, db: AsyncSession = Depends(get
           description="Создает новую запись о здании по указанным адресом и координатами")
 async def create_building(address: str, latitude: float, longitude: float, db: AsyncSession = Depends(get_db)):
     try:
+        existing_building = await db.execute(
+            select(Building).where(Building.address == address)
+        )
+        if existing_building.scalars().first() is not None:
+            return HTTPException(status_code=400, detail="Здание уже существует")
+
         new_building = Building(address=address, latitude=latitude, longitude=longitude)
         db.add(new_building)
         await db.commit()
