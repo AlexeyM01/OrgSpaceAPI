@@ -1,0 +1,68 @@
+-- Заполнение таблицы buildings
+INSERT INTO buildings (address, latitude, longitude) VALUES
+('г. Москва, ул. Ленина 1, офис 3', 55.7558, 37.6173),
+('г. Санкт-Петербург, Невский проспект 28', 59.9390, 30.3158),
+('г. Казань, ул. Баумана 58', 55.7961, 49.1061),
+('г. Екатеринбург, ул. Вайнера 10', 56.8389, 60.6057),
+('г. Новосибирск, Красный проспект 22', 55.0302, 82.9204),
+('г. Самара, ул. Ленинградская 77', 53.1953, 50.1017),
+('г. Ростов-на-Дону, ул. Большая Садовая 47', 47.2354, 39.7023),
+('г. Уфа, проспект Октября 56', 54.7431, 55.9678),
+('г. Красноярск, проспект Мира 91', 56.0100, 92.8525),
+('г. Пермь, Комсомольский проспект 54', 58.0105, 56.2333);
+
+-- Заполнение таблицы activities
+INSERT INTO activities (name, parent_id, level) VALUES
+('Еда', NULL, 1),
+('Автомобили', NULL, 1),
+('Мясная продукция', (SELECT id FROM activities WHERE name = 'Еда'), 2),
+('Молочная продукция', (SELECT id FROM activities WHERE name = 'Еда'), 2),
+('Грузовые', (SELECT id FROM activities WHERE name = 'Автомобили'), 2),
+('Легковые', (SELECT id FROM activities WHERE name = 'Автомобили'), 2),
+('Запчасти', (SELECT id FROM activities WHERE name = 'Легковые'), 3),
+('Аксессуары', (SELECT id FROM activities WHERE name = 'Легковые'), 3),
+('Рыбная продукция', (SELECT id FROM activities WHERE name = 'Еда'), 2),
+('Фрукты и овощи', (SELECT id FROM activities WHERE name = 'Еда'), 2);
+
+-- Заполнение таблицы organizations
+INSERT INTO organizations (name, building_id) VALUES
+('ООО "Рога и Копыта"', (SELECT id FROM buildings WHERE address = 'г. Москва, ул. Ленина 1, офис 3')),
+('ЗАО "Молочные реки"', (SELECT id FROM buildings WHERE address = 'г. Санкт-Петербург, Невский проспект 28')),
+('ИП "Мясной рай"', (SELECT id FROM buildings WHERE address = 'г. Казань, ул. Баумана 58')),
+('ООО "АвтоТранс"', (SELECT id FROM buildings WHERE address = 'г. Екатеринбург, ул. Вайнера 10')),
+('ООО "АвтоДеталь"', (SELECT id FROM buildings WHERE address = 'г. Новосибирск, Красный проспект 22')),
+('ООО "Рыба-Кит"', (SELECT id FROM buildings WHERE address = 'г. Самара, ул. Ленинградская 77')),
+('ООО "ФруктОпт"', (SELECT id FROM buildings WHERE address = 'г. Ростов-на-Дону, ул. Большая Садовая 47')),
+('ИП "Молочный мир"', (SELECT id FROM buildings WHERE address = 'г. Уфа, проспект Октября 56')),
+('ООО "КрасАвто"', (SELECT id FROM buildings WHERE address = 'г. Красноярск, проспект Мира 91')),
+('ООО "ПермьАвто"', (SELECT id FROM buildings WHERE address = 'г. Пермь, Комсомольский проспект 54'));
+
+
+-- Заполнение таблицы phone_numbers
+INSERT INTO phone_numbers (number, organization_id) VALUES
+('+74951112233', (SELECT id FROM organizations WHERE name = 'ООО "Рога и Копыта"')),
+('+74951112244', (SELECT id FROM organizations WHERE name = 'ООО "Рога и Копыта"')),
+('+78123334455', (SELECT id FROM organizations WHERE name = 'ЗАО "Молочные реки"')),
+('+78435556677', (SELECT id FROM organizations WHERE name = 'ИП "Мясной рай"')),
+('+73437778899', (SELECT id FROM organizations WHERE name = 'ООО "АвтоТранс"')),
+('+73839990011', (SELECT id FROM organizations WHERE name = 'ООО "АвтоДеталь"')),
+('+78461112233', (SELECT id FROM organizations WHERE name = 'ООО "Рыба-Кит"')),
+('+78633334455', (SELECT id FROM organizations WHERE name = 'ООО "ФруктОпт"')),
+('+73475556677', (SELECT id FROM organizations WHERE name = 'ИП "Молочный мир"')),
+('+73917778899', (SELECT id FROM organizations WHERE name = 'ООО "КрасАвто"')),
+('+73429990011', (SELECT id FROM organizations WHERE name = 'ООО "ПермьАвто"'));
+
+-- Заполнение таблицы organization_activities
+INSERT INTO organization_activities (organization_id, activity_id) VALUES
+((SELECT id FROM organizations WHERE name = 'ООО "Рога и Копыта"'), (SELECT id FROM activities WHERE name = 'Мясная продукция')),
+((SELECT id FROM organizations WHERE name = 'ООО "Рога и Копыта"'), (SELECT id FROM activities WHERE name = 'Молочная продукция')),
+((SELECT id FROM organizations WHERE name = 'ЗАО "Молочные реки"'), (SELECT id FROM activities WHERE name = 'Молочная продукция')),
+((SELECT id FROM organizations WHERE name = 'ИП "Мясной рай"'), (SELECT id FROM activities WHERE name = 'Мясная продукция')),
+((SELECT id FROM organizations WHERE name = 'ООО "АвтоТранс"'), (SELECT id FROM activities WHERE name = 'Грузовые')),
+((SELECT id FROM organizations WHERE name = 'ООО "АвтоДеталь"'), (SELECT id FROM activities WHERE name = 'Запчасти')),
+((SELECT id FROM organizations WHERE name = 'ООО "АвтоДеталь"'), (SELECT id FROM activities WHERE name = 'Аксессуары')),
+((SELECT id FROM organizations WHERE name = 'ООО "Рыба-Кит"'), (SELECT id FROM activities WHERE name = 'Рыбная продукция')),
+((SELECT id FROM organizations WHERE name = 'ООО "ФруктОпт"'), (SELECT id FROM activities WHERE name = 'Фрукты и овощи')),
+((SELECT id FROM organizations WHERE name = 'ИП "Молочный мир"'), (SELECT id FROM activities WHERE name = 'Молочная продукция')),
+((SELECT id FROM organizations WHERE name = 'ООО "КрасАвто"'), (SELECT id FROM activities WHERE name = 'Легковые')),
+((SELECT id FROM organizations WHERE name = 'ООО "ПермьАвто"'), (SELECT id FROM activities WHERE name = 'Грузовые'));
