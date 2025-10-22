@@ -1,9 +1,14 @@
-from fastapi import FastAPI, Depends, HTTPException
+"""
+main.py
+"""
+
+from fastapi import FastAPI, Depends, HTTPException, Header
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
+from src.config import API_KEY
 from src.database import get_db, init_db
 from src.models import Organization, Building, Activity, OrganizationActivity, PhoneNumber
 
@@ -17,12 +22,18 @@ def handle_exception(e):
     return JSONResponse(status_code=500, content={"message": f"Произошла неизвестная ошибка: {e}"})
 
 
+async def verify_api_key(x_api_key: str = Header(...)):
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Невалидный ключ AP")
+    return True
+
+
 @app.on_event("startup")
 async def startup_event():
     await init_db()
 
 
-@app.get("/organizations/by_building_address/",
+@app.get("/organizations/by_building_address/", dependencies=[Depends(verify_api_key)],
          description="Получает организации, связанные с указанным адресом здания")
 async def get_organizations_by_building_address(address: str, db: AsyncSession = Depends(get_db)):
     try:
@@ -43,7 +54,7 @@ async def get_organizations_by_building_address(address: str, db: AsyncSession =
         return handle_exception(e)
 
 
-@app.get("/organizations/by_activity_name/",
+@app.get("/organizations/by_activity_name/", dependencies=[Depends(verify_api_key)],
          description="Получает организации, связанные с указанным именем активности.")
 async def get_organizations_by_activity_name(activity_name: str, db: AsyncSession = Depends(get_db)):
     try:
@@ -65,7 +76,7 @@ async def get_organizations_by_activity_name(activity_name: str, db: AsyncSessio
         return handle_exception(e)
 
 
-@app.get("/organizations/by_area/",
+@app.get("/organizations/by_area/", dependencies=[Depends(verify_api_key)],
          description="Получает здания, расположенные в указанной области")
 async def get_organizations_by_area(latitude: float, longitude: float, lat_diff: float, lon_diff: float,
                                     db: AsyncSession = Depends(get_db)):
@@ -89,7 +100,8 @@ async def get_organizations_by_area(latitude: float, longitude: float, lat_diff:
         return handle_exception(e)
 
 
-@app.get("/organization/{org_id}/", description="Получает детали организации по ID")
+@app.get("/organization/{org_id}/", dependencies=[Depends(verify_api_key)],
+         description="Получает детали организации по ID")
 async def get_organization(org_id: int, db: AsyncSession = Depends(get_db)):
     try:
         organization_query = select(Organization).where(Organization.id == org_id)
@@ -112,7 +124,7 @@ async def get_organization(org_id: int, db: AsyncSession = Depends(get_db)):
         return handle_exception(e)
 
 
-@app.get("/organizations/search_by_activity/")
+@app.get("/organizations/search_by_activity/", dependencies=[Depends(verify_api_key)])
 async def search_organizations_by_activity(activity_name: str, db: AsyncSession = Depends(get_db)):
     activities_to_search = []
 
@@ -148,7 +160,7 @@ async def search_organizations_by_activity(activity_name: str, db: AsyncSession 
         return handle_exception(e)
 
 
-@app.get("/organizations/search_by_name/",
+@app.get("/organizations/search_by_name/", dependencies=[Depends(verify_api_key)],
          description="Ищет организации, имена которых содержат указанную строку")
 async def search_organizations_by_name(name: str, db: AsyncSession = Depends(get_db)):
     try:
@@ -166,7 +178,7 @@ async def search_organizations_by_name(name: str, db: AsyncSession = Depends(get
         return handle_exception(e)
 
 
-@app.post("/create_building/",
+@app.post("/create_building/", dependencies=[Depends(verify_api_key)],
           description="Создает новую запись о здании по указанным адресом и координатами")
 async def create_building(address: str, latitude: float, longitude: float, db: AsyncSession = Depends(get_db)):
     try:
@@ -186,7 +198,7 @@ async def create_building(address: str, latitude: float, longitude: float, db: A
         return handle_exception(e)
 
 
-@app.post("/create_organization/",
+@app.post("/create_organization/", dependencies=[Depends(verify_api_key)],
           description="Создает новую организацию по указанным данным")
 async def create_organization(name: str, address: str, phone_numbers: list[str], activities: list[str],
                               db: AsyncSession = Depends(get_db)):
@@ -228,7 +240,7 @@ async def create_organization(name: str, address: str, phone_numbers: list[str],
         return handle_exception(e)
 
 
-@app.post("/activities/",
+@app.post("/activities/", dependencies=[Depends(verify_api_key)],
           summary="Создать новую активность",
           description="Создает новую активность, возможно, под родительской активностью")
 async def create_activity(name: str, parent_id: int = None, db: AsyncSession = Depends(get_db)):
