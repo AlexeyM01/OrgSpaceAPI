@@ -1,4 +1,9 @@
-fastapi
-uvicorn[standard]
-python-dotenv
-psycopg2-binary
+alembic==1.16.4
+fastapi==0.119.1
+phonenumbers==9.0.16
+pydantic==2.12.3
+python-dotenv==1.1.1
+SQLAlchemy==2.0.44
+uvicorn
+sqlalchemy
+asyncpg
