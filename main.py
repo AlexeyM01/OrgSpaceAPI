@@ -57,6 +57,9 @@ async def get_organizations_by_activity_name(activity_name: str, db: AsyncSessio
         organizations_result = await db.execute(organizations_query)
         organizations = organizations_result.scalars().all()
 
+        if not organizations:
+            return JSONResponse(status_code=404, content={"message": "Организаций не найдено"})
+
         return {"organizations": [org.organization.name for org in organizations]}
     except Exception as e:
         return handle_exception(e)
@@ -79,6 +82,8 @@ async def get_organizations_by_area(latitude: float, longitude: float, lat_diff:
         result = await db.execute(query)
         buildings = result.scalars().all()
 
+        if not buildings:
+            return JSONResponse(status_code=404, content={"message": "Зданий не найдено"})
         return {"buildings": [{"id": b.id, "address": b.address} for b in buildings]}
     except Exception as e:
         return handle_exception(e)
@@ -136,6 +141,8 @@ async def search_organizations_by_activity(activity_name: str, db: AsyncSession 
             orgs = orgs_result.scalars().all()
             organizations.update(org.organization for org in orgs)
 
+        if not organizations:
+            return JSONResponse(status_code=404, content={"message": "Организаций не найдено"})
         return {"organizations": [org.name for org in organizations]}
     except Exception as e:
         return handle_exception(e)
@@ -184,7 +191,7 @@ async def create_building(address: str, latitude: float, longitude: float, db: A
 async def create_organization(name: str, address: str, phone_numbers: list[str], activities: list[str],
                               db: AsyncSession = Depends(get_db)):
     try:
-        # Проверяем, существует ли организация с таким же именем
+
         existing_organization_query = select(Organization).where(Organization.name == name)
         existing_organization_result = await db.execute(existing_organization_query)
         existing_organization = existing_organization_result.scalars().first()
