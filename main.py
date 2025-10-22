@@ -220,3 +220,26 @@ async def create_organization(name: str, address: str, phone_numbers: list[str],
         await db.rollback()
         return handle_exception(e)
 
+
+@app.post("/activities/",
+          summary="Создать новую активность",
+          description="Создает новую активность, возможно, под родительской активностью")
+async def create_activity(name: str, parent_id: int = None, db: AsyncSession = Depends(get_db)):
+    try:
+        if parent_id is not None:
+            parent_activity_query = select(Activity).where(Activity.id == parent_id)
+            parent_activity_result = await db.execute(parent_activity_query)
+            parent_activity = parent_activity_result.scalars().first()
+
+            if parent_activity and parent_activity.level >= 3:
+                return JSONResponse(status_code=400,
+                                    content={"message": "Нельзя создать активность глубиной больше трёх"})
+
+        new_activity = Activity(name=name, parent_id=parent_id)
+        db.add(new_activity)
+        await db.commit()
+        await db.refresh(new_activity)
+        return {"id": new_activity.id, "name": new_activity.name}
+    except Exception as e:
+        await db.rollback()
+        return handle_exception(e)
