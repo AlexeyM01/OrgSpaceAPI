@@ -2,7 +2,7 @@
 main.py
 """
 
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,7 @@ import logging
 from src.config import API_KEY
 from src.database import get_db, init_db
 from src.models import Organization, Building, Activity, OrganizationActivity, PhoneNumber
+from src.models import OrganizationCreate, OrganizationUpdate, BuildingCreate
 
 app = FastAPI()
 
@@ -178,17 +179,18 @@ async def search_organizations_by_name(name: str, db: AsyncSession = Depends(get
         return handle_exception(e)
 
 
-@app.post("/create_building/", dependencies=[Depends(verify_api_key)],
-          description="Создает новую запись о здании по указанным адресом и координатами")
-async def create_building(address: str, latitude: float, longitude: float, db: AsyncSession = Depends(get_db)):
+@app.post("/create_building/", dependencies=[Depends(verify_api_key)], response_model=None,
+          description="Создает новую запись о здании по указанным адресом и координатами",
+          status_code=status.HTTP_201_CREATED)
+async def create_building(building: BuildingCreate, db: AsyncSession = Depends(get_db)):
     try:
         existing_building = await db.execute(
-            select(Building).where(Building.address == address)
+            select(Building).where(Building.address == building.address)
         )
         if existing_building.scalars().first() is not None:
-            return HTTPException(status_code=400, detail="Здание уже существует")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Здание уже существует")
 
-        new_building = Building(address=address, latitude=latitude, longitude=longitude)
+        new_building = Building(**building.model_dump())
         db.add(new_building)
         await db.commit()
         await db.refresh(new_building)
@@ -198,35 +200,34 @@ async def create_building(address: str, latitude: float, longitude: float, db: A
         return handle_exception(e)
 
 
-@app.post("/create_organization/", dependencies=[Depends(verify_api_key)],
-          description="Создает новую организацию по указанным данным")
-async def create_organization(name: str, address: str, phone_numbers: list[str], activities: list[str],
-                              db: AsyncSession = Depends(get_db)):
+@app.post("/create_organization/", dependencies=[Depends(verify_api_key)], response_model=None,
+          description="Создает новую организацию по указанным данным", status_code=status.HTTP_201_CREATED)
+async def create_organization(organization: OrganizationCreate, db: AsyncSession = Depends(get_db)):
     try:
-
-        existing_organization_query = select(Organization).where(Organization.name == name)
+        existing_organization_query = select(Organization).where(Organization.name == organization.name)
         existing_organization_result = await db.execute(existing_organization_query)
         existing_organization = existing_organization_result.scalars().first()
         if existing_organization:
-            return HTTPException(status_code=400, detail="Организация с таким именем уже существует")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="Организация с таким именем уже существует")
 
-        building_query = select(Building).where(Building.address == address)
+        building_query = select(Building).where(Building.id == organization.building_id)
         building_result = await db.execute(building_query)
         building = building_result.scalars().first()
         if not building:
             return JSONResponse(status_code=404, content={"message": "Здание не найдено"})
 
-        new_organization = Organization(name=name, building_id=building.id)
+        new_organization = Organization(name=organization.name, building_id=organization.building_id)
         db.add(new_organization)
         await db.commit()
         await db.refresh(new_organization)
 
-        for number in phone_numbers:
-            phone_number = PhoneNumber(number=number, organization_id=new_organization.id)
+        for phone in organization.phone_numbers:
+            phone_number = PhoneNumber(number=phone.number, organization_id=new_organization.id)
             db.add(phone_number)
 
-        for activity_name in activities:
-            activity_query = select(Activity).where(Activity.name == activity_name)
+        for activity_id in organization.activity_ids:
+            activity_query = select(Activity).where(Activity.id == activity_id)
             activity_result = await db.execute(activity_query)
             activity = activity_result.scalars().first()
             if activity:
@@ -259,6 +260,137 @@ async def create_activity(name: str, parent_id: int = None, db: AsyncSession = D
         await db.commit()
         await db.refresh(new_activity)
         return {"id": new_activity.id, "name": new_activity.name}
+    except Exception as e:
+        await db.rollback()
+        return handle_exception(e)
+
+
+@app.put("/organizations/{org_id}/",
+         description="Обновляет существующую организацию",
+         response_model=None)
+async def update_organization(org_id: int, organization: OrganizationUpdate, db: AsyncSession = Depends(get_db)):
+    try:
+        existing_organization_query = select(Organization).where(Organization.id == org_id)
+        existing_organization_result = await db.execute(existing_organization_query)
+        existing_organization = existing_organization_result.scalars().first()
+
+        if not existing_organization:
+            raise HTTPException(status_code=404, detail="Организация не найдена")
+
+        if organization.name is not None:
+            existing_organization.name = organization.name
+        if organization.building_id is not None:
+            building_query = select(Building).where(Building.id == organization.building_id)
+            building_result = await db.execute(building_query)
+            building = building_result.scalars().first()
+            if not building:
+                raise HTTPException(status_code=400, detail="Здание не найдено")
+            existing_organization.building_id = organization.building_id
+
+        if organization.phone_numbers is not None:
+            for phone_number in existing_organization.phone_numbers:
+                await db.delete(phone_number)
+
+            for phone in organization.phone_numbers:
+                phone_number = PhoneNumber(number=phone.number, organization_id=existing_organization.id)
+                db.add(phone_number)
+
+        if organization.activity_ids is not None:
+            activity_query = select(OrganizationActivity).where(OrganizationActivity.organization_id == org_id)
+            activity_result = await db.execute(activity_query)
+            existing_activities = activity_result.scalars().all()
+            for activity in existing_activities:
+                await db.delete(activity)
+
+            for activity_id in organization.activity_ids:
+                activity_query = select(Activity).where(Activity.id == activity_id)
+                activity_result = await db.execute(activity_query)
+                activity = activity_result.scalars().first()
+                if activity:
+                    org_activity = OrganizationActivity(organization_id=existing_organization.id, activity_id=activity.id)
+                    db.add(org_activity)
+
+        await db.commit()
+        await db.refresh(existing_organization)
+        return {"id": existing_organization.id, "name": existing_organization.name}
+    except Exception as e:
+        await db.rollback()
+        return handle_exception(e)
+
+
+@app.put("/buildings/{building_id}/",
+         description="Обновляет существующее здание",
+         response_model=None)
+async def update_building(building_id: int, building: BuildingCreate, db: AsyncSession = Depends(get_db)):
+    try:
+        existing_building_query = select(Building).where(Building.id == building_id)
+        existing_building_result = await db.execute(existing_building_query)
+        existing_building = existing_building_result.scalars().first()
+
+        if not existing_building:
+            raise HTTPException(status_code=404, detail="Здание не найдено")
+
+        existing_building.address = building.address
+        existing_building.latitude = building.latitude
+        existing_building.longitude = building.longitude
+
+        await db.commit()
+        await db.refresh(existing_building)
+        return {"id": existing_building.id, "address": existing_building.address}
+    except Exception as e:
+        await db.rollback()
+        return handle_exception(e)
+
+
+@app.delete("/organizations/{org_id}/",
+            description="Удаляет организацию")
+async def delete_organization(org_id: int, db: AsyncSession = Depends(get_db)):
+    try:
+        organization_query = select(Organization).where(Organization.id == org_id)
+        organization_result = await db.execute(organization_query)
+        organization = organization_result.scalars().first()
+        if not organization:
+            raise HTTPException(status_code=404, detail="Организация не найдена")
+
+        await db.delete(organization)
+        await db.commit()
+        return {"message": f"Организация с ID {org_id} успешно удалена"}
+    except Exception as e:
+        await db.rollback()
+        return handle_exception(e)
+
+
+@app.delete("/buildings/{building_id}/",
+            description="Удаляет здание")
+async def delete_building(building_id: int, db: AsyncSession = Depends(get_db)):
+    try:
+        building_query = select(Building).where(Building.id == building_id)
+        building_result = await db.execute(building_query)
+        building = building_result.scalars().first()
+        if not building:
+            raise HTTPException(status_code=404, detail="Здание не найдено")
+
+        await db.delete(building)
+        await db.commit()
+        return {"message": f"Здание с ID {building_id} успешно удалено"}
+    except Exception as e:
+        await db.rollback()
+        return handle_exception(e)
+
+
+@app.delete("/activities/{activity_id}/",
+            description="Удаляет активность")
+async def delete_activity(activity_id: int, db: AsyncSession = Depends(get_db)):
+    try:
+        activity_query = select(Activity).where(Activity.id == activity_id)
+        activity_result = await db.execute(activity_query)
+        activity = activity_result.scalars().first()
+        if not activity:
+            raise HTTPException(status_code=404, detail="Активность не найдена")
+
+        await db.delete(activity)
+        await db.commit()
+        return {"message": f"Активность с ID {activity_id} успешно удалена"}
     except Exception as e:
         await db.rollback()
         return handle_exception(e)

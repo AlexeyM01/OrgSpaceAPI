@@ -1,7 +1,6 @@
 """
 src/models.py
 """
-from phonenumbers import NumberParseException
 from pydantic import BaseModel, field_validator
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
@@ -39,7 +38,7 @@ class PhoneNumber(Base):
         try:
             parsed_number = phonenumbers.parse(number, "RU")
             return phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
-        except NumberParseException:
+        except phonenumbers.NumberParseException:
             return False
 
 
@@ -59,16 +58,10 @@ class Activity(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, unique=True, nullable=False)
     parent_id = Column(Integer, ForeignKey('activities.id'), nullable=True)
-    level = Column(Integer, nullable=False)
+    level = Column(Integer, nullable=True)
 
     sub_activities = relationship("Activity", remote_side=[id])
     organizations = relationship("OrganizationActivity", back_populates="activity", lazy="selectin")
-
-    @validates('level')
-    def validate_level(self, level):
-        if level > 3:
-            raise ValueError("Максимальный уровень вложенности деятельности - 3")
-        return level
 
 
 class OrganizationActivity(Base):
