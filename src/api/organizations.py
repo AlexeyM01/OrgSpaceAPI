@@ -1,8 +1,9 @@
-from fastapi import Depends, APIRouter, HTTPException
+from typing import Dict, Any
+
+from fastapi import Depends, APIRouter, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette import status
-from starlette.responses import JSONResponse
 
 from src.database import get_db
 from src.models import Building, Organization, Activity, OrganizationActivity, PhoneNumber
@@ -17,7 +18,8 @@ router = APIRouter(
 
 @router.get("/by_building_address/", dependencies=[Depends(verify_api_key)],
             description="Получает организации, связанные с указанным адресом здания")
-async def get_organizations_by_building_address(address: str, db: AsyncSession = Depends(get_db)):
+async def get_organizations_by_building_address(address: str, db: AsyncSession = Depends(get_db))\
+        -> Dict[str, list[str]] | JSONResponse:
     try:
         building_query = select(Building).where(Building.address == address)
         result = await db.execute(building_query)
@@ -36,9 +38,10 @@ async def get_organizations_by_building_address(address: str, db: AsyncSession =
         return handle_exception(e)
 
 
-@router.get("/organizations/by_activity_name/", dependencies=[Depends(verify_api_key)],
+@router.get("/by_activity_name/", dependencies=[Depends(verify_api_key)],
             description="Получает организации, связанные с указанным именем активности.")
-async def get_organizations_by_activity_name(activity_name: str, db: AsyncSession = Depends(get_db)):
+async def get_organizations_by_activity_name(activity_name: str,
+                                             db: AsyncSession = Depends(get_db)) -> Dict[str, list[str]] | JSONResponse:
     try:
         activity_query = select(Activity).where(Activity.name == activity_name)
         activity_result = await db.execute(activity_query)
@@ -60,8 +63,9 @@ async def get_organizations_by_activity_name(activity_name: str, db: AsyncSessio
 
 @router.get("/by_area/", dependencies=[Depends(verify_api_key)],
             description="Получает здания, расположенные в указанной области")
-async def get_organizations_by_area(latitude: float, longitude: float, lat_diff: float, lon_diff: float,
-                                    db: AsyncSession = Depends(get_db)):
+async def get_organizations_by_area(latitude: float, longitude: float, lat_diff: float,
+                                    lon_diff: float, db: AsyncSession = Depends(get_db))\
+        -> Dict[str, list[Dict[str, Any]]] | JSONResponse:
     try:
         min_latitude = latitude - lat_diff
         max_latitude = latitude + lat_diff
@@ -84,13 +88,13 @@ async def get_organizations_by_area(latitude: float, longitude: float, lat_diff:
 
 @router.get("/{org_id}/", dependencies=[Depends(verify_api_key)],
             description="Получает детали организации по ID")
-async def get_organization(org_id: int, db: AsyncSession = Depends(get_db)):
+async def get_organization(org_id: int, db: AsyncSession = Depends(get_db)) -> Dict[str, Any] | JSONResponse:
     try:
         organization_query = select(Organization).where(Organization.id == org_id)
         result = await db.execute(organization_query)
         organization = result.scalars().first()
         if not organization:
-            return JSONResponse(status_code=404, content={"message": "Организация не найдена"})
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Организация не найдена")
 
         address_query = select(Building).where(Building.id == organization.building_id)
         address_result = await db.execute(address_query)
@@ -107,7 +111,8 @@ async def get_organization(org_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/search_by_activity/", dependencies=[Depends(verify_api_key)])
-async def search_organizations_by_activity(activity_name: str, db: AsyncSession = Depends(get_db)):
+async def search_organizations_by_activity(activity_name: str,
+                                           db: AsyncSession = Depends(get_db)) -> Dict[str, list[str]] | JSONResponse:
     activities_to_search = []
 
     async def find_subactivities(activity, level):
@@ -144,7 +149,8 @@ async def search_organizations_by_activity(activity_name: str, db: AsyncSession 
 
 @router.get("/search_by_name/", dependencies=[Depends(verify_api_key)],
             description="Ищет организации, имена которых содержат указанную строку")
-async def search_organizations_by_name(name: str, db: AsyncSession = Depends(get_db)):
+async def search_organizations_by_name(name: str, db: AsyncSession = Depends(get_db))\
+        -> Dict[str, list[Dict[str, Any]]] | JSONResponse:
     try:
         query = select(Organization).where(Organization.name.ilike(f"%{name}%"))
         result = await db.execute(query)
@@ -162,7 +168,8 @@ async def search_organizations_by_name(name: str, db: AsyncSession = Depends(get
 
 @router.post("/create/", dependencies=[Depends(verify_api_key)], response_model=None,
              description="Создает новую организацию по указанным данным", status_code=status.HTTP_201_CREATED)
-async def create_organization(organization: OrganizationCreate, db: AsyncSession = Depends(get_db)):
+async def create_organization(organization: OrganizationCreate,
+                              db: AsyncSession = Depends(get_db)) -> Dict[str, str] | JSONResponse:
     try:
         existing_organization_query = select(Organization).where(Organization.name == organization.name)
         existing_organization_result = await db.execute(existing_organization_query)
@@ -204,7 +211,8 @@ async def create_organization(organization: OrganizationCreate, db: AsyncSession
 @router.put("/{org_id}/",
             description="Обновляет существующую организацию",
             response_model=None)
-async def update_organization(org_id: int, organization: OrganizationUpdate, db: AsyncSession = Depends(get_db)):
+async def update_organization(org_id: int, organization: OrganizationUpdate,
+                              db: AsyncSession = Depends(get_db)) -> Dict[str, str] | JSONResponse:
     try:
         existing_organization_query = select(Organization).where(Organization.id == org_id)
         existing_organization_result = await db.execute(existing_organization_query)
@@ -258,7 +266,7 @@ async def update_organization(org_id: int, organization: OrganizationUpdate, db:
 
 @router.delete("/delete/{org_id}/",
                description="Удаляет организацию")
-async def delete_organization(org_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_organization(org_id: int, db: AsyncSession = Depends(get_db)) -> Dict[str, str] | JSONResponse:
     try:
         organization_query = select(Organization).where(Organization.id == org_id)
         organization_result = await db.execute(organization_query)
