@@ -1,11 +1,9 @@
 """
 src/models.py
 """
-from pydantic import BaseModel, field_validator
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, validates
-import phonenumbers
+from sqlalchemy.orm import relationship
 
 
 Base = declarative_base()
@@ -32,14 +30,6 @@ class PhoneNumber(Base):
     organization_id = Column(Integer, ForeignKey('organizations.id'), nullable=False)
 
     organization = relationship("Organization", back_populates="phone_numbers", lazy="selectin")
-
-    @validates('number')
-    def validate_number(self, cls, number):
-        try:
-            parsed_number = phonenumbers.parse(number, "RU")
-            return phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
-        except phonenumbers.NumberParseException:
-            return False
 
 
 class Building(Base):
@@ -72,59 +62,3 @@ class OrganizationActivity(Base):
 
     organization = relationship("Organization", back_populates="activities", lazy="selectin")
     activity = relationship("Activity", back_populates="organizations", lazy="selectin")
-
-
-class PhoneNumberModel(BaseModel):
-    number: str
-
-    @field_validator('number')
-    def validate_number(cls, value):
-        try:
-            parsed_number = phonenumbers.parse(value, "RU")
-            if not phonenumbers.is_valid_number(parsed_number):
-                raise ValueError("Неверный формат номера телефона")
-            return phonenumbers.format_number(parsed_number, phonenumbers.PhoneNumberFormat.E164)
-        except phonenumbers.phonenumberutil.NumberParseException:
-            raise ValueError("Неверный формат номера телефона")
-
-
-class OrganizationCreate(BaseModel):
-    name: str
-    building_id: int
-    phone_numbers: list[PhoneNumberModel]
-    activity_ids: list[int]
-
-
-class OrganizationUpdate(BaseModel):
-    name: str | None = None
-    building_id: int | None = None
-    phone_numbers: list[PhoneNumberModel] | None = None
-    activity_ids: list[int] | None = None
-
-
-class BuildingCreate(BaseModel):
-    address: str
-    latitude: float
-    longitude: float
-
-
-class ActivityCreate(BaseModel):
-    name: str
-    parent_id: int | None = None
-
-    @field_validator('parent_id')
-    def validate_parent_id(cls, value):
-        if value <= 0:
-            raise ValueError("Parent ID cannot be negative")
-        return value
-
-
-class ActivityUpdate(BaseModel):
-    name: str | None = None
-    parent_id: int | None = None
-
-    @field_validator('parent_id')
-    def validate_parent_id(cls, value):
-        if value == 0:
-            raise ValueError("Parent ID cannot be 0")
-        return value
